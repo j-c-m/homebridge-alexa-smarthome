@@ -1380,7 +1380,7 @@ class AlexaRemote extends EventEmitter {
           body.includes('Too many requests'))
       ) {
         this._options.logger &&
-          this._options.logger('Alexa-Remote: Rate exceeded respsone');
+          this._options.logger(`Alexa-Remote: Rate exceeded response: ${body}`);
         doRetry = true;
       }
 
@@ -1395,12 +1395,14 @@ class AlexaRemote extends EventEmitter {
         flags.curRetry = flags.curRetry || 1;
 
         if (flags.curRetry < maxRetries) {
-          let delay = base * Math.pow(2.5, flags.curRetry++);
+          let delay = base * Math.pow(2.5, flags.curRetry);
 
           this._options.logger &&
               this._options.logger(
                 `Alexa-Remote: Retry [${flags.curRetry}/${maxRetries}] in ${delay}ms`,
               );
+
+          flags.curRetry++;
 
           return setTimeout(
             () => this.httpsGetCall(path, callback, flags),
@@ -1408,8 +1410,6 @@ class AlexaRemote extends EventEmitter {
           );
         }
       }
-
-
 
       if (!body) {
         // Method 'DELETE' may return HTTP STATUS 200 without body
