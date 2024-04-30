@@ -1395,7 +1395,7 @@ class AlexaRemote extends EventEmitter {
         flags.curRetry = flags.curRetry || 1;
 
         if (flags.curRetry < maxRetries) {
-          let delay = base * Math.pow(2.5, flags.curRetry++)
+          let delay = base * Math.pow(2.5, flags.curRetry++);
 
           this._options.logger &&
               this._options.logger(
