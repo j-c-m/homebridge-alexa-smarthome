@@ -1386,48 +1386,57 @@ class AlexaRemote extends EventEmitter {
         return callback(null, body);
       }
 
-      let ret;
-      try {
-        ret = JSON.parse(body);
-      } catch (e) {
-        if (
-          typeof res.statusCode === 'number' &&
-          res.statusCode >= 500 &&
-          res.statusCode < 510
-        ) {
-          this._options.logger &&
-            this._options.logger(
-              `Alexa-Remote: Response: Status: ${res.statusCode}`,
-            );
-          callback(new Error('no body'), null);
-          callback = null;
-          return;
-        }
-
+      if (
+        typeof res.statusCode === 'number' &&
+        res.statusCode >= 500 &&
+        res.statusCode < 510
+      ) {
         this._options.logger &&
           this._options.logger(
-            `Alexa-Remote: Response: No/Invalid JSON : ${body}`,
+            `Alexa-Remote: Response: Status: ${res.statusCode}`,
           );
-        if (
-          (body.includes('ThrottlingException') ||
-            body.includes('Rate exceeded') ||
-            body.includes('Too many requests')) &&
-          !flags.isRetry
-        ) {
-          let delay = Math.floor(Math.random() * 3000) + 10000;
-          if (body.includes('Too many requests')) {
-            delay += 20000 + Math.floor(Math.random() * 30000);
-          }
+        callback(new Error('no body'), null);
+        callback = null;
+        return;
+      }
+
+      if (
+        (body.includes('ThrottlingException') ||
+          body.includes('Rate exceeded') ||
+          body.includes('Too many requests'))
+      ) {
+        // retry logic
+        let base = 2000;
+        let mult = 2.5;
+        let maxRetries = 5;
+
+        flags.isRetry = true;
+        flags.curRetry = flags.curRetry || 1;
+
+        if (flags.curRetry < maxRetries) {
+          let delay = base * Math.pow(2.5, flags.curRetry)
+
           this._options.logger &&
-            this._options.logger(
-              `Alexa-Remote: rate exceeded response ... Retrying once in ${delay}ms`,
-            );
-          flags.isRetry = true;
+              this._options.logger(
+                `Alexa-Remote: rate exceeded response ... Retry [${flags.curRetry}/${maxRetries}] once in ${delay}ms`,
+              );
+
           return setTimeout(
             () => this.httpsGetCall(path, callback, flags),
             delay,
           );
         }
+      }
+
+      let ret;
+
+      try {
+        ret = JSON.parse(body);
+      } catch (e) {
+        this._options.logger &&
+          this._options.logger(
+            `Alexa-Remote: Response: No/Invalid JSON : ${body}`,
+          );
         callback && callback(new Error('no JSON'), body);
         callback = null;
         return;
@@ -1438,26 +1447,6 @@ class AlexaRemote extends EventEmitter {
       // add x-amzn-ErrorType header to err? (e.g. 400 on /player: ExpiredPlayQueueException:http://internal.amazon.com/coral/com.amazon.dee.web.coral.model/)
       this._options.logger &&
         this._options.logger(`Alexa-Remote: Response: ${JSON.stringify(ret)}`);
-      if (
-        (body.includes('ThrottlingException') ||
-          body.includes('Rate exceeded') ||
-          body.includes('Too many requests')) &&
-        !flags.isRetry
-      ) {
-        let delay = Math.floor(Math.random() * 3000) + 10000;
-        if (body.includes('Too many requests')) {
-          delay += 20000 + Math.floor(Math.random() * 30000);
-        }
-        this._options.logger &&
-          this._options.logger(
-            `Alexa-Remote: rate exceeded response ... Retrying once in ${delay}ms`,
-          );
-        flags.isRetry = true;
-        return setTimeout(
-          () => this.httpsGetCall(path, callback, flags),
-          delay,
-        );
-      }
       callback(null, ret);
       callback = null;
     };
