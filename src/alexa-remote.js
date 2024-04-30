@@ -1354,22 +1354,64 @@ class AlexaRemote extends EventEmitter {
         return callback(new Error('401 Unauthorized'), null);
       }
 
-      if (
-        !err &&
-        typeof res.statusCode === 'number' &&
-        res.statusCode === 503 &&
-        !flags.isRetry
-      ) {
+      if (err) {
         this._options.logger &&
-          this._options.logger('Alexa-Remote: Response: 503 ... Retrying once');
-        flags.isRetry = true;
-        return setTimeout(
-          () => this.httpsGetCall(path, callback, flags),
-          Math.floor(Math.random() * 500) + 500,
-        );
+          this._options.logger(
+            `Alexa-Remote: Response: No body (code=${res && res.statusCode})`,
+          );
+          callback(new Error('no body'), null);
       }
 
-      if (err || !body) {
+      let doRetry = false;
+
+      if (
+        typeof res.satusCode === 'number' &&
+        res.statusCode == 503
+      ) {
+        this._options.logger &&
+          this._options.logger(`Alexa-Remote: Response: ${req.statusCode}`);
+        doRetry = true;
+      }
+
+      if (
+        body &&
+        (body.includes('ThrottlingException') ||
+          body.includes('Rate exceeded') ||
+          body.includes('Too many requests'))
+      ) {
+        this._options.logger &&
+          this._options.logger('Alexa-Remote: Rate exceeded respsone');
+        doRetry = true;
+      }
+
+      if (doRetry)
+      {
+        // retry logic
+        let base = 2000;
+        let mult = 2.5;
+        let maxRetries = 5;
+
+        flags.isRetry = true;
+        flags.curRetry = flags.curRetry || 1;
+
+        if (flags.curRetry < maxRetries) {
+          this._options.logger &&
+              this._options.logger(
+                `Alexa-Remote: Retry [${flags.curRetry}/${maxRetries}] in ${delay}ms`,
+              );
+
+          let delay = base * Math.pow(2.5, flags.curRetry++)
+
+          return setTimeout(
+            () => this.httpsGetCall(path, callback, flags),
+            delay,
+          );
+        }
+      }
+
+
+
+      if (!body) {
         // Method 'DELETE' may return HTTP STATUS 200 without body
         this._options.logger &&
           this._options.logger(
@@ -1380,10 +1422,6 @@ class AlexaRemote extends EventEmitter {
           res.statusCode < 300
           ? callback(null, { success: true })
           : callback(new Error('no body'), null);
-      }
-
-      if (flags && flags.handleAsText) {
-        return callback(null, body);
       }
 
       if (
@@ -1400,32 +1438,8 @@ class AlexaRemote extends EventEmitter {
         return;
       }
 
-      if (
-        (body.includes('ThrottlingException') ||
-          body.includes('Rate exceeded') ||
-          body.includes('Too many requests'))
-      ) {
-        // retry logic
-        let base = 2000;
-        let mult = 2.5;
-        let maxRetries = 5;
-
-        flags.isRetry = true;
-        flags.curRetry = flags.curRetry || 1;
-
-        if (flags.curRetry < maxRetries) {
-          let delay = base * Math.pow(2.5, flags.curRetry)
-
-          this._options.logger &&
-              this._options.logger(
-                `Alexa-Remote: rate exceeded response ... Retry [${flags.curRetry}/${maxRetries}] once in ${delay}ms`,
-              );
-
-          return setTimeout(
-            () => this.httpsGetCall(path, callback, flags),
-            delay,
-          );
-        }
+      if (flags && flags.handleAsText) {
+        return callback(null, body);
       }
 
       let ret;
