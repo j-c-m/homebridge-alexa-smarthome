@@ -1395,12 +1395,12 @@ class AlexaRemote extends EventEmitter {
         flags.curRetry = flags.curRetry || 1;
 
         if (flags.curRetry < maxRetries) {
+          let delay = base * Math.pow(2.5, flags.curRetry++)
+
           this._options.logger &&
               this._options.logger(
                 `Alexa-Remote: Retry [${flags.curRetry}/${maxRetries}] in ${delay}ms`,
               );
-
-          let delay = base * Math.pow(2.5, flags.curRetry++)
 
           return setTimeout(
             () => this.httpsGetCall(path, callback, flags),
